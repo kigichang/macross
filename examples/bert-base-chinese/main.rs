@@ -1,25 +1,25 @@
 use anyhow::Result;
-use candle_core::IndexOp;
-use candle_core::Tensor;
+use candle_core::{IndexOp, Tensor};
 use candle_nn::ops::softmax;
+use macross::models::bert::BertForMaskedLM;
+use macross::{AutoModel, AutoTokenizer, PretrainedModel};
 
 fn main() -> Result<()> {
     let test_strs = vec!["巴黎是[MASK]国的首都。", "生活的真谛是[MASK]。"];
     let device = macross::device(false)?;
 
-    let hf = {
-        let mut hf = macross::HFModel::default();
-        hf.repo_id = "kigichang/fix-bert-base-chinese".to_owned();
-        hf.model = "fix-bert-base-chinese.safetensors".to_owned();
-        hf
-    }
-    .get(false)?;
+    let pretrained_model = PretrainedModel::with_files(
+        "kigichang/fix-bert-base-chinese",
+        "config.json",
+        "fix-bert-base-chinese.safetensors",
+    );
 
-    let tokenizer = hf.load_tokenizer().map_err(anyhow::Error::msg)?;
-    let config = hf.load_config()?;
-    let vb = hf.load_model(candle_core::DType::F32, &device)?;
+    let tokenizer = AutoTokenizer::from_pretrained("kigichang/fix-bert-base-chinese".into())
+        .map_err(anyhow::Error::msg)?;
 
-    let bert = macross::models::bert::BertForMaskedLM::load(vb, &config)?;
+    let bert =
+        BertForMaskedLM::from_pretrained(pretrained_model, candle_core::DType::F32, &device)?;
+
     let mask_id: u32 = tokenizer
         .token_to_id("[MASK]")
         .ok_or(anyhow::Error::msg("No [MASK] token"))?;

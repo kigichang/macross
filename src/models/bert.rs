@@ -5,7 +5,9 @@ use candle_transformers::models::with_tracing::{layer_norm, linear, LayerNorm, L
 use serde::Deserialize;
 use std::collections::HashMap;
 
-use crate::activations::{HiddenAct, HiddenActLayer};
+use crate::models::activations::{HiddenAct, HiddenActLayer};
+
+use crate::AutoModel;
 
 // https://github.com/huggingface/transformers/blob/v4.46.3/src/transformers/models/bert/configuration_bert.py#L99
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -29,6 +31,10 @@ pub struct Config {
     classifier_dropout: Option<f64>,
     id2label: Option<HashMap<String, String>>,
     model_type: Option<String>,
+}
+
+impl Config {
+    fn test(&self) {}
 }
 
 impl Default for Config {
@@ -545,8 +551,15 @@ pub struct BertForMaskedLM {
     cls: BertOnlyMLMHead,
 }
 
+impl AutoModel<Config> for BertForMaskedLM {
+    type Model = Self;
+    fn auto_load(vb: VarBuilder, config: &Config) -> Result<Self::Model> {
+        Self::load(vb, config)
+    }
+}
+
 impl BertForMaskedLM {
-    pub fn load(vb: VarBuilder, config: &Config) -> Result<Self> {
+    fn load(vb: VarBuilder, config: &Config) -> Result<Self> {
         let bert = BertModel::load(vb.pp("bert"), config)?;
         let cls = BertOnlyMLMHead::load(vb.pp("cls"), config)?;
         Ok(Self { bert, cls })
@@ -602,9 +615,16 @@ pub struct BertForSequenceClassification {
     classifier: candle_nn::Linear,
 }
 
+impl AutoModel<Config> for BertForSequenceClassification {
+    type Model = Self;
+    fn auto_load(vb: VarBuilder, config: &Config) -> Result<Self::Model> {
+        Self::load(vb, config)
+    }
+}
+
 impl BertForSequenceClassification {
     // https://github.com/huggingface/transformers/blob/v4.46.3/src/transformers/models/bert/modeling_bert.py#L1624
-    pub fn load(vb: VarBuilder, config: &Config) -> candle_core::Result<Self> {
+    fn load(vb: VarBuilder, config: &Config) -> Result<Self> {
         let bert = BertModel::load(vb.pp("bert"), config)?;
         let dropout = Dropout::new(if let Some(pr) = config.classifier_dropout {
             pr

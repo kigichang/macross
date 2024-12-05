@@ -1,22 +1,15 @@
 use anyhow::Result;
 use candle_core::Tensor;
+use macross::models::bert::BertForSequenceClassification;
+use macross::{AutoModel, AutoTokenizer};
 
 fn main() -> Result<()> {
     let device = macross::device(false)?;
-    let hf = {
-        let hf = macross::HFModel::new_pth("cross-encoder/ms-marco-MiniLM-L-6-v2");
-        hf
-    };
-    let hf = {
-        let mut hf = hf.get_ignore_tokenizer(true)?;
-        hf.tokenizer = std::path::PathBuf::from_iter(&["tmp", "tokenizer.json"])
-            .to_string_lossy()
-            .to_string();
-        hf
-    };
 
     let tokenizer = {
-        let mut tokenizer = hf.load_tokenizer().map_err(anyhow::Error::msg)?;
+        let mut tokenizer =
+            AutoTokenizer::from_local(std::path::PathBuf::from_iter(&["tmp", "tokenizer.json"]))
+                .map_err(anyhow::Error::msg)?;
         let params = tokenizers::PaddingParams::default();
         let tokenizer = tokenizer.with_padding(Some(params)).clone();
         tokenizer
@@ -34,9 +27,11 @@ fn main() -> Result<()> {
         ),
     ], true).map_err(anyhow::Error::msg)?;
 
-    let config = hf.load_config()?;
-    let vb = hf.load_model(candle_core::DType::F32, &device)?;
-    let bert = macross::models::bert::BertForSequenceClassification::load(vb, &config)?;
+    let bert = BertForSequenceClassification::from_pretrained(
+        ("cross-encoder/ms-marco-MiniLM-L-6-v2", true).into(),
+        candle_core::DType::F32,
+        &device,
+    )?;
     let ids = encoded
         .iter()
         .map(|e| Tensor::new(e.get_ids(), &device).unwrap())
