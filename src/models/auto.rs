@@ -3,17 +3,18 @@ use candle_core::{DType, Device};
 use candle_nn::VarBuilder;
 use std::{
     ops::{Deref, DerefMut},
-    path::Path,
+    path::{is_separator, Path},
 };
 use tokenizers::Tokenizer;
 
-fn is_safetenors<P: AsRef<Path>>(model_file: P) -> bool {
+fn is_pth<P: AsRef<Path>>(model_file: P) -> bool {
     if let Some(ext) = model_file.as_ref().extension() {
-        ext == "safetensors"
+        ext == "bin"
     } else {
         false
     }
 }
+
 pub struct AutoTokenizer(Tokenizer);
 
 impl Deref for AutoTokenizer {
@@ -58,12 +59,10 @@ pub trait AutoModel<C: serde::de::DeserializeOwned> {
     ) -> anyhow::Result<Self::Model> {
         let reader = std::fs::File::open(config_file)?;
         let config: C = serde_json::from_reader(reader)?;
-
-        let vb = if is_safetenors(&model_file) {
-            println!("loading from safetensors");
-            unsafe { VarBuilder::from_mmaped_safetensors(&[model_file], dtype, device)? }
-        } else {
+        let vb = if !is_pth(&model_file) {
             VarBuilder::from_pth(model_file, dtype, device)?
+        } else {
+            unsafe { VarBuilder::from_mmaped_safetensors(&[model_file], dtype, device)? }
         };
 
         Self::auto_load(vb, &config).map_err(anyhow::Error::msg)
@@ -80,4 +79,25 @@ pub trait AutoModel<C: serde::de::DeserializeOwned> {
     }
 
     fn auto_load(vb: VarBuilder, config: &C) -> candle_core::Result<Self::Model>;
+}
+
+impl AutoModel<super::bert::Config> for super::bert::BertModel {
+    type Model = Self;
+    fn auto_load(vb: VarBuilder, config: &super::bert::Config) -> candle_core::Result<Self::Model> {
+        Self::load(vb, config)
+    }
+}
+
+impl AutoModel<super::bert::Config> for super::bert::BertForMaskedLM {
+    type Model = Self;
+    fn auto_load(vb: VarBuilder, config: &super::bert::Config) -> candle_core::Result<Self::Model> {
+        Self::load(vb, config)
+    }
+}
+
+impl AutoModel<super::bert::Config> for super::bert::BertForSequenceClassification {
+    type Model = Self;
+    fn auto_load(vb: VarBuilder, config: &super::bert::Config) -> candle_core::Result<Self::Model> {
+        Self::load(vb, config)
+    }
 }

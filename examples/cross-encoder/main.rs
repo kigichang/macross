@@ -15,17 +15,22 @@ fn main() -> Result<()> {
         tokenizer
     };
 
-    let encoded = tokenizer.encode_batch(vec![
-        (
-            "How many people live in Berlin?",
-            "Berlin has a population of 3,520,031 registered inhabitants in an area of 891.82 square kilometers.",
+    let encoded = tokenizer
+        .encode_batch(
+            vec![
+                (
+                    "How many people live in Berlin?",
+                    "Berlin has a population of 3,520,031 registered inhabitants in an area of 891.82 square kilometers.",
 
-        ),
-        (
-            "How many people live in Berlin?",
-            "New York City is famous for the Metropolitan Museum of Art.",
-        ),
-    ], true).map_err(anyhow::Error::msg)?;
+                ),
+                (
+                    "How many people live in Berlin?",
+                    "New York City is famous for the Metropolitan Museum of Art.",
+                ),
+            ],
+            true,
+        )
+        .map_err(anyhow::Error::msg)?;
 
     let bert = BertForSequenceClassification::from_pretrained(
         ("cross-encoder/ms-marco-MiniLM-L-6-v2", true).into(),

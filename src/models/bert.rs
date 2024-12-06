@@ -7,8 +7,6 @@ use std::collections::HashMap;
 
 use crate::models::activations::{HiddenAct, HiddenActLayer};
 
-use crate::AutoModel;
-
 // https://github.com/huggingface/transformers/blob/v4.46.3/src/transformers/models/bert/configuration_bert.py#L99
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct Config {
@@ -551,15 +549,8 @@ pub struct BertForMaskedLM {
     cls: BertOnlyMLMHead,
 }
 
-impl AutoModel<Config> for BertForMaskedLM {
-    type Model = Self;
-    fn auto_load(vb: VarBuilder, config: &Config) -> Result<Self::Model> {
-        Self::load(vb, config)
-    }
-}
-
 impl BertForMaskedLM {
-    fn load(vb: VarBuilder, config: &Config) -> Result<Self> {
+    pub fn load(vb: VarBuilder, config: &Config) -> Result<Self> {
         let bert = BertModel::load(vb.pp("bert"), config)?;
         let cls = BertOnlyMLMHead::load(vb.pp("cls"), config)?;
         Ok(Self { bert, cls })
@@ -615,24 +606,23 @@ pub struct BertForSequenceClassification {
     classifier: candle_nn::Linear,
 }
 
-impl AutoModel<Config> for BertForSequenceClassification {
-    type Model = Self;
-    fn auto_load(vb: VarBuilder, config: &Config) -> Result<Self::Model> {
-        Self::load(vb, config)
-    }
-}
-
 impl BertForSequenceClassification {
     // https://github.com/huggingface/transformers/blob/v4.46.3/src/transformers/models/bert/modeling_bert.py#L1624
-    fn load(vb: VarBuilder, config: &Config) -> Result<Self> {
+    pub fn load(vb: VarBuilder, config: &Config) -> Result<Self> {
+        let num_labels = if let Some(id2label) = &config.id2label {
+            id2label.len()
+        } else {
+            candle_core::bail!("id2label is required for BertForSequenceClassification")
+        };
+
         let bert = BertModel::load(vb.pp("bert"), config)?;
         let dropout = Dropout::new(if let Some(pr) = config.classifier_dropout {
             pr
         } else {
             config.hidden_dropout_prob
         });
-        // num_labels 目前沒有支援多個 Label，故固定為 1
-        let classifier = candle_nn::linear(config.hidden_size, 1, vb.pp("classifier"))?;
+
+        let classifier = candle_nn::linear(config.hidden_size, num_labels, vb.pp("classifier"))?;
         Ok(Self {
             bert,
             dropout,
