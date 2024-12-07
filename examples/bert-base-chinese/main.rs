@@ -14,7 +14,7 @@ fn main() -> Result<()> {
         "fix-bert-base-chinese.safetensors",
     );
 
-    let tokenizer = AutoTokenizer::from_pretrained("kigichang/fix-bert-base-chinese".into())
+    let tokenizer = AutoTokenizer::from_pretrained("kigichang/fix-bert-base-chinese")
         .map_err(anyhow::Error::msg)?;
 
     let bert =

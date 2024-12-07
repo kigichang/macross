@@ -33,7 +33,7 @@ fn main() -> Result<()> {
         .map_err(anyhow::Error::msg)?;
 
     let bert = BertForSequenceClassification::from_pretrained(
-        ("cross-encoder/ms-marco-MiniLM-L-6-v2", true).into(),
+        ("cross-encoder/ms-marco-MiniLM-L-6-v2", true),
         candle_core::DType::F32,
         &device,
     )?;

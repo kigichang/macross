@@ -3,7 +3,7 @@ use candle_core::{DType, Device};
 use candle_nn::VarBuilder;
 use std::{
     ops::{Deref, DerefMut},
-    path::{is_separator, Path},
+    path::Path,
 };
 use tokenizers::Tokenizer;
 
@@ -36,8 +36,8 @@ impl AutoTokenizer {
         Ok(Self(Tokenizer::from_file(tokenizer_file)?))
     }
 
-    pub fn from_pretrained(model_repo: ModelRepo) -> tokenizers::Result<Self> {
-        let tokenizer_file = model_repo.download("tokenizer.json")?;
+    pub fn from_pretrained<M: Into<ModelRepo>>(model_repo: M) -> tokenizers::Result<Self> {
+        let tokenizer_file = model_repo.into().download("tokenizer.json")?;
         Ok(Self(Tokenizer::from_file(tokenizer_file)?))
     }
 
@@ -45,7 +45,7 @@ impl AutoTokenizer {
         repo_id: &str,
         revision: &str,
     ) -> tokenizers::Result<Self> {
-        Self::from_pretrained((repo_id, revision).into())
+        Self::from_pretrained((repo_id, revision))
     }
 }
 
@@ -59,7 +59,7 @@ pub trait AutoModel<C: serde::de::DeserializeOwned> {
     ) -> anyhow::Result<Self::Model> {
         let reader = std::fs::File::open(config_file)?;
         let config: C = serde_json::from_reader(reader)?;
-        let vb = if !is_pth(&model_file) {
+        let vb = if is_pth(&model_file) {
             VarBuilder::from_pth(model_file, dtype, device)?
         } else {
             unsafe { VarBuilder::from_mmaped_safetensors(&[model_file], dtype, device)? }
@@ -68,11 +68,12 @@ pub trait AutoModel<C: serde::de::DeserializeOwned> {
         Self::auto_load(vb, &config).map_err(anyhow::Error::msg)
     }
 
-    fn from_pretrained(
-        pretrained_model: PretrainedModel,
+    fn from_pretrained<M: Into<PretrainedModel>>(
+        pretrained_model: M,
         dtype: DType,
         device: &Device,
     ) -> anyhow::Result<Self::Model> {
+        let pretrained_model = pretrained_model.into();
         let config = pretrained_model.config()?;
         let model = pretrained_model.model()?;
         Self::from_local(config, model, dtype, device)
