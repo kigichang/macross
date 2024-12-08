@@ -438,7 +438,7 @@ impl BertModel {
         input_ids: &Tensor,
         token_type_ids: &Tensor,
         attention_mask: Option<&Tensor>,
-    ) -> Result<Tensor> {
+    ) -> Result<(Tensor, Option<Tensor>)> {
         let _enter = self.span.enter();
         let embedding_output = self.embeddings.forward(input_ids, token_type_ids)?;
         let attention_mask = match attention_mask {
@@ -448,15 +448,14 @@ impl BertModel {
         // https://github.com/huggingface/transformers/blob/6eedfa6dd15dc1e22a55ae036f681914e5a0d9a1/src/transformers/models/bert/modeling_bert.py#L995
         let attention_mask = get_extended_attention_mask(&attention_mask, DType::F32)?;
         let sequence_output = self.encoder.forward(&embedding_output, &attention_mask)?;
-
         // 加入 pooler 層推論
         // https://github.com/huggingface/transformers/blob/v4.46.3/src/transformers/models/bert/modeling_bert.py#L1155
-        let result = if let Some(ref pooler) = self.pooler {
-            pooler.forward(&sequence_output)?
+        let pooled_ouput = if let Some(pooler) = &self.pooler {
+            Some(pooler.forward(&sequence_output)?)
         } else {
-            sequence_output
+            None
         };
-        Ok(result)
+        Ok((sequence_output, pooled_ouput))
     }
 }
 
@@ -565,7 +564,7 @@ impl BertForMaskedLM {
         let sequence_output = self
             .bert
             .forward(input_ids, token_type_ids, attention_mask)?;
-        self.cls.forward(&sequence_output)
+        self.cls.forward(&sequence_output.0)
     }
 }
 
@@ -642,8 +641,19 @@ impl BertForSequenceClassification {
             .forward(input_ids, token_type_ids, attention_mask)?;
 
         // https://github.com/huggingface/transformers/blob/v4.46.3/src/transformers/models/bert/modeling_bert.py#L1682
-        let pooled_output = self.dropout.forward(&output)?;
+        let pooled_output = self.dropout.forward(&output.1.unwrap())?;
         let logits = self.classifier.forward(&pooled_output)?;
         Ok(logits)
     }
+}
+
+pub fn mean_pooling(output: &Tensor, attention_mask: &Tensor) -> candle_core::Result<Tensor> {
+    let attention_mask = attention_mask.unsqueeze(candle_core::D::Minus1)?;
+    let input_mask_expanded = attention_mask
+        .expand(output.shape())?
+        .to_dtype(DType::F32)?;
+    let sum = output.broadcast_mul(&input_mask_expanded)?.sum(1)?;
+    let mask = input_mask_expanded.sum(1)?;
+    let mask = mask.clamp(1e-9, f32::INFINITY)?;
+    sum / mask
 }

@@ -27,7 +27,9 @@ print(encoded_input)
 with torch.no_grad():
     model_output = model(**encoded_input)
 
-print("model_output:")
+print("model_output[0]:")
+print(model_output[0])
+print("model_output[1]:")
 print(model_output[0])
 
 # Perform pooling
@@ -37,4 +39,4 @@ sentence_embeddings = mean_pooling(model_output, encoded_input['attention_mask']
 sentence_embeddings = F.normalize(sentence_embeddings, p=2, dim=1)
 
 print("Sentence embeddings:")
-#print(sentence_embeddings)
+print(sentence_embeddings)
