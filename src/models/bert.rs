@@ -31,10 +31,6 @@ pub struct Config {
     model_type: Option<String>,
 }
 
-impl Config {
-    fn test(&self) {}
-}
-
 impl Default for Config {
     fn default() -> Self {
         Self {
