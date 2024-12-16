@@ -1,11 +1,11 @@
 #![allow(dead_code)]
+use super::auto::AutoModel;
+use crate::models::activations::{HiddenAct, HiddenActLayer};
 use candle_core::{DType, Device, IndexOp, Result, Tensor};
 use candle_nn::{embedding, Embedding, Module, VarBuilder};
 use candle_transformers::models::with_tracing::{layer_norm, linear, LayerNorm, Linear};
 use serde::Deserialize;
 use std::collections::HashMap;
-
-use crate::models::activations::{HiddenAct, HiddenActLayer};
 
 // https://github.com/huggingface/transformers/blob/v4.46.3/src/transformers/models/bert/configuration_bert.py#L99
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -656,4 +656,18 @@ pub fn mean_pooling(output: &Tensor, attention_mask: &Tensor) -> candle_core::Re
     let mask = input_mask_expanded.sum(1)?;
     let mask = mask.clamp(1e-9, f32::INFINITY)?;
     sum / mask
+}
+
+impl AutoModel<super::bert::Config> for super::bert::BertForMaskedLM {
+    type Model = Self;
+    fn auto_load(vb: VarBuilder, config: &super::bert::Config) -> candle_core::Result<Self::Model> {
+        Self::load(vb, config)
+    }
+}
+
+impl AutoModel<super::bert::Config> for super::bert::BertForSequenceClassification {
+    type Model = Self;
+    fn auto_load(vb: VarBuilder, config: &super::bert::Config) -> candle_core::Result<Self::Model> {
+        Self::load(vb, config)
+    }
 }

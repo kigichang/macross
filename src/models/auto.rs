@@ -88,17 +88,3 @@ impl AutoModel<super::bert::Config> for super::bert::BertModel {
         Self::load(vb, config)
     }
 }
-
-impl AutoModel<super::bert::Config> for super::bert::BertForMaskedLM {
-    type Model = Self;
-    fn auto_load(vb: VarBuilder, config: &super::bert::Config) -> candle_core::Result<Self::Model> {
-        Self::load(vb, config)
-    }
-}
-
-impl AutoModel<super::bert::Config> for super::bert::BertForSequenceClassification {
-    type Model = Self;
-    fn auto_load(vb: VarBuilder, config: &super::bert::Config) -> candle_core::Result<Self::Model> {
-        Self::load(vb, config)
-    }
-}
