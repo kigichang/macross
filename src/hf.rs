@@ -1,4 +1,11 @@
-use hf_hub::{api::sync::Api, Repo, RepoType};
+use std::path::PathBuf;
+
+use hf_hub::{
+    api::sync::{Api, ApiError},
+    Repo, RepoType,
+};
+
+type Result<T> = std::result::Result<T, ApiError>;
 
 #[derive(Debug, Clone)]
 pub struct ModelRepo {
@@ -20,14 +27,15 @@ impl ModelRepo {
         Self { repo_id, revision }
     }
 
-    pub(crate) fn download(&self, file: &str) -> anyhow::Result<std::path::PathBuf> {
+    pub(crate) fn download(&self, file: &str) -> Result<PathBuf> {
         let repo =
             Repo::with_revision(self.repo_id.clone(), RepoType::Model, self.revision.clone());
         let api = Api::new()?.repo(repo);
-        Ok(api.get(file)?)
+        api.get(file)
     }
 }
 
+/// (repo_id, revision) -> ModelRepo
 impl From<(&str, &str)> for ModelRepo {
     fn from((repo_id, revision): (&str, &str)) -> Self {
         Self {
@@ -37,6 +45,7 @@ impl From<(&str, &str)> for ModelRepo {
     }
 }
 
+/// repo_id -> ModelRepo
 impl From<&str> for ModelRepo {
     fn from(repo_id: &str) -> Self {
         Self {
@@ -80,15 +89,16 @@ impl PretrainedModel {
         }
     }
 
-    pub fn config(&self) -> anyhow::Result<std::path::PathBuf> {
+    pub fn config(&self) -> Result<PathBuf> {
         self.repo.download(&self.config)
     }
 
-    pub fn model(&self) -> anyhow::Result<std::path::PathBuf> {
+    pub fn model(&self) -> Result<PathBuf> {
         self.repo.download(&self.model)
     }
 }
 
+/// (repo_id, revision, pth) -> PretrainedModel
 impl From<(&str, &str, bool)> for PretrainedModel {
     fn from((repo_id, revision, pth): (&str, &str, bool)) -> Self {
         Self {
@@ -103,18 +113,21 @@ impl From<(&str, &str, bool)> for PretrainedModel {
     }
 }
 
+/// (repo_id, revision) -> PretrainedModel, default safetensors
 impl From<(&str, &str)> for PretrainedModel {
     fn from((repo_id, revision): (&str, &str)) -> Self {
         (repo_id, revision, false).into()
     }
 }
 
+/// repo_id -> PretrainedModel, default main, safetensors
 impl From<&str> for PretrainedModel {
     fn from(repo_id: &str) -> Self {
         (repo_id, "main").into()
     }
 }
 
+/// (repo_id, pth) -> PretrainedModel, default main
 impl From<(&str, bool)> for PretrainedModel {
     fn from((repo_id, pth): (&str, bool)) -> Self {
         (repo_id, "main", pth).into()
