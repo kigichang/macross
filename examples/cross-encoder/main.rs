@@ -1,6 +1,6 @@
 use anyhow::Result;
 use candle_core::Tensor;
-use macross::models::bert::BertForSequenceClassification;
+use macross::models::bert_rs::BertForSequenceClassification;
 use macross::{AutoModel, AutoTokenizer};
 
 fn main() -> Result<()> {

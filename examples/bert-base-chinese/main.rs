@@ -1,7 +1,7 @@
 use anyhow::Result;
 use candle_core::{IndexOp, Tensor};
 use candle_nn::ops::softmax;
-use macross::models::bert::BertForMaskedLM;
+use macross::models::bert_rs::BertForMaskedLM;
 use macross::{AutoModel, AutoTokenizer, PretrainedModel};
 
 fn main() -> Result<()> {

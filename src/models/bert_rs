@@ -658,16 +658,22 @@ pub fn mean_pooling(output: &Tensor, attention_mask: &Tensor) -> candle_core::Re
     sum / mask
 }
 
-impl AutoModel<super::bert::Config> for super::bert::BertForMaskedLM {
+impl AutoModel<super::bert_rs::Config> for super::bert_rs::BertForMaskedLM {
     type Model = Self;
-    fn auto_load(vb: VarBuilder, config: &super::bert::Config) -> candle_core::Result<Self::Model> {
+    fn auto_load(
+        vb: VarBuilder,
+        config: &super::bert_rs::Config,
+    ) -> candle_core::Result<Self::Model> {
         Self::load(vb, config)
     }
 }
 
-impl AutoModel<super::bert::Config> for super::bert::BertForSequenceClassification {
+impl AutoModel<super::bert_rs::Config> for super::bert_rs::BertForSequenceClassification {
     type Model = Self;
-    fn auto_load(vb: VarBuilder, config: &super::bert::Config) -> candle_core::Result<Self::Model> {
+    fn auto_load(
+        vb: VarBuilder,
+        config: &super::bert_rs::Config,
+    ) -> candle_core::Result<Self::Model> {
         Self::load(vb, config)
     }
 }

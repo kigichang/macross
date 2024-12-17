@@ -18,7 +18,7 @@ fn main() -> Result<()> {
         tokenizer.clone()
     };
 
-    let bert = macross::models::bert::BertModel::from_pretrained(
+    let bert = macross::models::bert_rs::BertModel::from_pretrained(
         ("sentence-transformers/all-MiniLM-L6-v2", true),
         candle_core::DType::F32,
         &device,
@@ -46,7 +46,7 @@ fn main() -> Result<()> {
     let attention_mask = Tensor::stack(&attention_mask, 0)?;
 
     let result = bert.forward(&ids, &type_ids, Some(&attention_mask))?;
-    let mean = macross::models::bert::mean_pooling(&result.0, &attention_mask)?;
+    let mean = macross::models::bert_rs::mean_pooling(&result.0, &attention_mask)?;
     let result = macross::normalize(&mean)?;
     println!("result: {:?}", result.to_vec2::<f32>()?);
     Ok(())

@@ -81,10 +81,3 @@ pub trait AutoModel<C: serde::de::DeserializeOwned> {
 
     fn auto_load(vb: VarBuilder, config: &C) -> candle_core::Result<Self::Model>;
 }
-
-impl AutoModel<super::bert::Config> for super::bert::BertModel {
-    type Model = Self;
-    fn auto_load(vb: VarBuilder, config: &super::bert::Config) -> candle_core::Result<Self::Model> {
-        Self::load(vb, config)
-    }
-}
