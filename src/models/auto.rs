@@ -49,8 +49,19 @@ impl AutoTokenizer {
     }
 }
 
+// pub trait PreloadModel<C: serde::de::DeserializeOwned> {
+//     fn new(vb: VarBuilder, config: &C) -> candle_core::Result<Self>
+//     where
+//         Self: Sized;
+// }
+
 pub trait AutoModel<C: serde::de::DeserializeOwned> {
     type Model;
+
+    fn new(vb: VarBuilder, config: &C) -> candle_core::Result<Self::Model>
+    where
+        Self::Model: Sized;
+
     fn from_local<P: AsRef<Path>>(
         config_file: P,
         model_file: P,
@@ -65,7 +76,7 @@ pub trait AutoModel<C: serde::de::DeserializeOwned> {
             unsafe { VarBuilder::from_mmaped_safetensors(&[model_file], dtype, device)? }
         };
 
-        Self::auto_load(vb, &config).map_err(anyhow::Error::msg)
+        Self::new(vb, &config).map_err(anyhow::Error::msg)
     }
 
     fn from_pretrained<M: Into<PretrainedModel>>(
@@ -77,28 +88,5 @@ pub trait AutoModel<C: serde::de::DeserializeOwned> {
         let config = pretrained_model.config()?;
         let model = pretrained_model.model()?;
         Self::from_local(config, model, dtype, device)
-    }
-
-    fn auto_load(vb: VarBuilder, config: &C) -> candle_core::Result<Self::Model>;
-}
-
-impl AutoModel<super::bert::Config> for super::bert::BertModel {
-    type Model = Self;
-    fn auto_load(vb: VarBuilder, config: &super::bert::Config) -> candle_core::Result<Self::Model> {
-        Self::load(vb, config)
-    }
-}
-
-impl AutoModel<super::bert::Config> for super::bert::BertForMaskedLM {
-    type Model = Self;
-    fn auto_load(vb: VarBuilder, config: &super::bert::Config) -> candle_core::Result<Self::Model> {
-        Self::load(vb, config)
-    }
-}
-
-impl AutoModel<super::bert::Config> for super::bert::BertForSequenceClassification {
-    type Model = Self;
-    fn auto_load(vb: VarBuilder, config: &super::bert::Config) -> candle_core::Result<Self::Model> {
-        Self::load(vb, config)
     }
 }

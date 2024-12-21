@@ -45,8 +45,8 @@ fn main() -> Result<()> {
         .collect::<Vec<_>>();
     let attention_mask = Tensor::stack(&attention_mask, 0)?;
 
-    let result = bert.forward(&ids, &type_ids, Some(&attention_mask))?;
-    let mean = macross::models::bert::mean_pooling(&result.0, &attention_mask)?;
+    let result = bert.forward(&ids, &type_ids, &attention_mask)?;
+    let mean = macross::models::bert::mean_pooling(&result, &attention_mask)?;
     let result = macross::normalize(&mean)?;
     println!("result: {:?}", result.to_vec2::<f32>()?);
     Ok(())
