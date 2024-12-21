@@ -1,0 +1,148 @@
+use candle_core::{Result, Tensor};
+use candle_nn::{Module, VarBuilder};
+use serde::Deserialize;
+use std::collections::HashMap;
+
+use crate::{Dropout, Embedding, LayerNorm};
+
+use super::activations::HiddenAct;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+enum PositionEmbeddingType {
+    #[default]
+    Absolute,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct Config {
+    vocab_size: usize,
+    hidden_size: usize,
+    num_hidden_layers: usize,
+    num_attention_heads: usize,
+    intermediate_size: usize,
+    pub hidden_act: HiddenAct,
+    hidden_dropout_prob: f64,
+    attention_probs_dropout_prob: f64,
+    max_position_embeddings: usize,
+    type_vocab_size: usize,
+    initializer_range: f64,
+    layer_norm_eps: f64,
+    pad_token_id: usize,
+    #[serde(default)]
+    position_embedding_type: PositionEmbeddingType,
+    #[serde(default)]
+    use_cache: bool,
+    classifier_dropout: Option<f64>,
+    id2label: Option<HashMap<String, String>>,
+    label2id: Option<HashMap<String, usize>>,
+    model_type: Option<String>,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            vocab_size: 30522,
+            hidden_size: 768,
+            num_hidden_layers: 12,
+            num_attention_heads: 12,
+            intermediate_size: 3072,
+            hidden_act: HiddenAct::Gelu,
+            hidden_dropout_prob: 0.1,
+            attention_probs_dropout_prob: 0.1,
+            max_position_embeddings: 512,
+            type_vocab_size: 2,
+            initializer_range: 0.02,
+            layer_norm_eps: 1e-12,
+            pad_token_id: 0,
+            position_embedding_type: PositionEmbeddingType::Absolute,
+            use_cache: true,
+            classifier_dropout: None,
+            id2label: None,
+            label2id: None,
+            model_type: Some("bert".to_owned()),
+        }
+    }
+}
+
+pub struct BertEmbeddings {
+    word_embeddings: Embedding,
+    position_embeddings: Option<Embedding>,
+    token_type_embeddings: Embedding,
+    layer_norm: LayerNorm,
+    dropout: Dropout,
+    span: tracing::Span,
+}
+
+impl BertEmbeddings {
+    fn load(vb: VarBuilder, config: &Config) -> Result<Self> {
+        let word_embeddings = crate::embedding(
+            config.vocab_size,
+            config.hidden_size,
+            vb.pp("word_embeddings"),
+        )?;
+        let position_embeddings = crate::embedding(
+            config.max_position_embeddings,
+            config.hidden_size,
+            vb.pp("position_embeddings"),
+        )?;
+        let token_type_embeddings = crate::embedding(
+            config.type_vocab_size,
+            config.hidden_size,
+            vb.pp("token_type_embeddings"),
+        )?;
+        let layer_norm = crate::layer_norm(
+            config.hidden_size,
+            config.layer_norm_eps,
+            vb.pp("LayerNorm"),
+        )?;
+
+        Ok(Self {
+            word_embeddings,
+            position_embeddings: Some(position_embeddings),
+            token_type_embeddings,
+            layer_norm,
+            dropout: Dropout::new(config.hidden_dropout_prob),
+            span: tracing::span!(tracing::Level::TRACE, "embeddings"),
+        })
+    }
+
+    fn forward(
+        &self,
+        input_ids: &Tensor,
+        token_type_ids: &Tensor,
+        position_ids: Option<&Tensor>,
+    ) -> Result<Tensor> {
+        let _enter = self.span.enter();
+        let (_bsize, seq_len) = input_ids.dims2()?;
+
+        let inputs_embeds = self.word_embeddings.forward(input_ids)?;
+        let token_type_embeddings = self.token_type_embeddings.forward(token_type_ids)?;
+        let mut embeddings = inputs_embeds.add(&token_type_embeddings)?;
+
+        if let Some(position_embeddings) = &self.position_embeddings {
+            let position_ids = if let Some(position_ids) = position_ids {
+                position_ids.clone()
+            } else {
+                Tensor::arange(0, seq_len as u32, input_ids.device())?
+            };
+            embeddings = embeddings.broadcast_add(&position_embeddings.forward(&position_ids)?)?;
+        }
+        let embeddings = self.layer_norm.forward(&embeddings)?;
+        self.dropout.forward(&embeddings)
+    }
+}
+
+pub struct BertSelfAttention {
+    query: crate::Linear,
+    key: crate::Linear,
+    value: crate::Linear,
+    dropout: crate::Dropout,
+    num_attention_heads: usize,
+    attention_head_size: usize,
+    all_head_size: usize,
+    span: tracing::Span,
+    span_softmax: tracing::Span,
+}
+
+impl BertSelfAttention {}
