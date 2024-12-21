@@ -3,7 +3,7 @@ import torch
 
 model = AutoModelForSequenceClassification.from_pretrained('cross-encoder/ms-marco-MiniLM-L-6-v2')
 tokenizer = AutoTokenizer.from_pretrained('cross-encoder/ms-marco-MiniLM-L-6-v2')
-print(tokenizer)
+#print(tokenizer)
 # 存 tokenizer
 tokenizer.save_pretrained("tmp")
 features = tokenizer(
@@ -19,7 +19,7 @@ features = tokenizer(
 
 model.eval()
 # 印出模型結構
-print(model)
+#print(model)
 with torch.no_grad():
     scores = model(**features).logits
     print(scores)

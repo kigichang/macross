@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use candle_core::{DType, D};
 use candle_core::{Result, Tensor};
 use candle_nn::Module;
@@ -5,6 +7,7 @@ use candle_nn::VarBuilder;
 use serde::Deserialize;
 
 use super::activations::HiddenAct;
+use super::auto::AutoModel;
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
@@ -35,6 +38,8 @@ pub struct BertConfig {
     pub use_cache: bool,
     pub classifier_dropout: Option<f64>,
     pub model_type: Option<String>,
+    pub id2label: Option<HashMap<String, String>>,
+    pub label2id: Option<HashMap<String, usize>>,
 }
 
 impl BertConfig {
@@ -56,6 +61,8 @@ impl BertConfig {
             use_cache: true,
             classifier_dropout: None,
             model_type: Some("bert".to_string()),
+            id2label: None,
+            label2id: None,
         }
     }
 }
@@ -132,23 +139,15 @@ impl BertEmbeddings {
 pub struct BertSelfAttention {
     num_attention_heads: usize,
     attention_head_size: usize,
-    //all_head_size: usize,
+
     query: crate::Linear,
     key: crate::Linear,
     value: crate::Linear,
     dropout: crate::Dropout,
-    position_embedding_type: PositionEmbeddingType,
-    // max_position_embeddings: Option<i64>,
-    // distance_embedding: Option<crate::Embedding>,
-    // is_decoder: bool,
 }
 
 impl BertSelfAttention {
-    pub fn new(
-        vb: VarBuilder,
-        config: &BertConfig,
-        position_embedding_type: Option<PositionEmbeddingType>,
-    ) -> Result<Self> {
+    pub fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
         let num_attention_heads = config.num_attention_heads;
         let attention_head_size = config.hidden_size / config.num_attention_heads;
         let all_head_size = num_attention_heads * attention_head_size;
@@ -158,18 +157,13 @@ impl BertSelfAttention {
         let value = crate::linear(config.hidden_size, all_head_size, vb.pp("value"))?;
         let dropout = crate::Dropout::new(config.attention_probs_dropout_prob);
 
-        let position_embedding_type =
-            position_embedding_type.unwrap_or(config.position_embedding_type.clone());
-
         Ok(Self {
             num_attention_heads,
             attention_head_size,
-            //all_head_size,
             query,
             key,
             value,
             dropout,
-            position_embedding_type,
         })
     }
 
@@ -237,13 +231,8 @@ pub struct BertAttention {
 }
 
 impl BertAttention {
-    pub fn new(
-        vb: VarBuilder,
-        config: &BertConfig,
-        position_embedding_type: Option<PositionEmbeddingType>,
-    ) -> Result<Self> {
-        let self_attention =
-            BertSelfAttention::new(vb.pp("self"), config, position_embedding_type)?;
+    pub fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
+        let self_attention = BertSelfAttention::new(vb.pp("self"), config)?;
         let output = BertSelfOutput::new(vb.pp("output"), config)?;
 
         Ok(Self {
@@ -319,7 +308,7 @@ pub struct BertLayer {
 
 impl BertLayer {
     pub fn new<'a>(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
-        let attention = BertAttention::new(vb.pp("attention"), config, None)?;
+        let attention = BertAttention::new(vb.pp("attention"), config)?;
         let intermediate = BertIntermediate::new(vb.pp("intermediate"), config)?;
         let output = BertOutput::new(vb.pp("output"), config)?;
 
@@ -345,7 +334,6 @@ impl BertLayer {
 }
 
 pub struct BertEncoder {
-    //config: BertConfig,
     layer: Vec<BertLayer>,
 }
 
@@ -355,10 +343,7 @@ impl BertEncoder {
             .map(|idx| BertLayer::new(vb.pp(format!("layer.{idx}")), config))
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(Self {
-            // config: config.clone(),
-            layer,
-        })
+        Ok(Self { layer })
     }
 
     pub fn forward(&self, hidden_states: &Tensor, attention_mask: &Tensor) -> Result<Tensor> {
@@ -378,7 +363,6 @@ pub struct BertPooler {
 impl BertPooler {
     pub fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
         let dense = crate::linear(config.hidden_size, config.hidden_size, vb.pp("dense"))?;
-        //let activation = |x: &Tensor| x.tanh();
 
         Ok(Self { dense })
     }
@@ -476,38 +460,22 @@ impl BertOnlyNSPHead {
 pub struct BertModel {
     embeddings: BertEmbeddings,
     encoder: BertEncoder,
-    //pooler: Option<BertPooler>,
 }
 
-impl BertModel {
-    pub fn new(vb: VarBuilder, config: &BertConfig) -> Result<BertModel> {
-        let (embeddings, encoder) = match (
-            BertEmbeddings::new(vb.pp("embeddings"), config),
-            BertEncoder::new(vb.pp("encoder"), config),
-        ) {
-            (Ok(embeddings), Ok(encoder)) => (embeddings, encoder),
-            (Err(err), _) | (_, Err(err)) => {
-                if let Some(model_type) = &config.model_type {
-                    if let (Ok(embeddings), Ok(encoder)) = (
-                        BertEmbeddings::new(vb.pp(format!("${model_type}.embeddings")), config),
-                        BertEncoder::new(vb.pp(format!("${model_type}.encoder")), config),
-                    ) {
-                        (embeddings, encoder)
-                    } else {
-                        return Err(err);
-                    }
-                } else {
-                    return Err(err);
-                }
-            }
-        };
+impl AutoModel<BertConfig> for BertModel {
+    type Model = Self;
+    fn new(vb: VarBuilder, config: &BertConfig) -> Result<BertModel> {
+        let embeddings = BertEmbeddings::new(vb.pp("embeddings"), config)?;
+        let encoder = BertEncoder::new(vb.pp("encoder"), config)?;
 
         Ok(BertModel {
             embeddings,
             encoder,
         })
     }
+}
 
+impl BertModel {
     pub fn get_input_embeddings(&self) -> &crate::Embedding {
         &self.embeddings.word_embeddings
     }
@@ -548,34 +516,22 @@ impl BertModel {
     }
 }
 
-pub struct BertWithPooler {
+pub struct BertModelWithPooler {
     bert: BertModel,
     pooler: BertPooler,
 }
 
-impl BertWithPooler {
-    pub fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
-        let bert = BertModel::new(vb.pp("bert"), config)?;
-        let pooler = match BertPooler::new(vb.pp("bert").pp("pooler"), config) {
-            Ok(pooler) => pooler,
-            Err(err) => {
-                if let Some(model_type) = &config.model_type {
-                    if let Ok(pooler) =
-                        BertPooler::new(vb.pp(format!("${model_type}.pooler")), config)
-                    {
-                        pooler
-                    } else {
-                        return Err(err);
-                    }
-                } else {
-                    return Err(err);
-                }
-            }
-        };
+impl AutoModel<BertConfig> for BertModelWithPooler {
+    type Model = Self;
+    fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
+        let bert = BertModel::new(vb.clone(), config)?;
+        let pooler = BertPooler::new(vb.pp("pooler"), config)?;
 
         Ok(Self { bert, pooler })
     }
+}
 
+impl BertModelWithPooler {
     pub fn forward(
         &self,
         input_ids: &Tensor,
@@ -629,14 +585,17 @@ pub struct BertForMaskedLM {
     cls: BertOnlyMLMHead,
 }
 
-impl BertForMaskedLM {
-    pub fn new(vb: VarBuilder, config: &BertConfig) -> Result<BertForMaskedLM> {
+impl AutoModel<BertConfig> for BertForMaskedLM {
+    type Model = Self;
+    fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
         let bert = BertModel::new(vb.pp("bert"), config)?;
         let cls = BertOnlyMLMHead::new(vb.pp("cls"), config)?;
 
         Ok(BertForMaskedLM { bert, cls })
     }
+}
 
+impl BertForMaskedLM {
     pub fn get_output_embeddings(&self) -> &crate::Linear {
         &self.cls.predictions.decoder
     }
@@ -659,6 +618,75 @@ impl BertForMaskedLM {
     }
 }
 
+pub struct BertForNextSentencePrediction {
+    bert: BertModelWithPooler,
+    cls: BertOnlyNSPHead,
+}
+
+impl BertForNextSentencePrediction {
+    pub fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
+        let bert = BertModelWithPooler::new(vb.pp("bert"), config)?;
+        let cls = BertOnlyNSPHead::new(vb.pp("cls"), config)?;
+
+        Ok(BertForNextSentencePrediction { bert, cls })
+    }
+
+    pub fn forward(
+        &self,
+        input_ids: &Tensor,
+        token_type_ids: &Tensor,
+        attention_mask: &Tensor,
+    ) -> Result<Tensor> {
+        let pooled_output = self
+            .bert
+            .forward(input_ids, attention_mask, token_type_ids)?;
+
+        self.cls.forward(&pooled_output)
+    }
+}
+
+pub struct BertForSequenceClassification {
+    bert: BertModelWithPooler,
+    dropout: crate::Dropout,
+    classifier: crate::Linear,
+}
+
+impl AutoModel<BertConfig> for BertForSequenceClassification {
+    type Model = Self;
+    fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
+        let bert = BertModelWithPooler::new(vb.pp("bert"), config)?;
+        let classifier_dropout = config
+            .classifier_dropout
+            .unwrap_or(config.hidden_dropout_prob);
+        let dropout = crate::Dropout::new(classifier_dropout);
+
+        let num_labels = config.id2label.as_ref().map(|ids| ids.len()).unwrap_or(2);
+        let classifier = crate::linear(config.hidden_size, num_labels, vb.pp("classifier"))?;
+
+        Ok(BertForSequenceClassification {
+            bert,
+            dropout,
+            classifier,
+        })
+    }
+}
+
+impl BertForSequenceClassification {
+    pub fn forward(
+        &self,
+        input_ids: &Tensor,
+        token_type_ids: &Tensor,
+        attention_mask: &Tensor,
+    ) -> Result<Tensor> {
+        let pooled_output = self
+            .bert
+            .forward(input_ids, token_type_ids, attention_mask)?;
+
+        let pooled_output = self.dropout.forward(&pooled_output)?;
+        self.classifier.forward(&pooled_output)
+    }
+}
+
 pub fn mean_pooling(output: &Tensor, attention_mask: &Tensor) -> candle_core::Result<Tensor> {
     let attention_mask = attention_mask.unsqueeze(candle_core::D::Minus1)?;
     let input_mask_expanded = attention_mask
@@ -668,11 +696,4 @@ pub fn mean_pooling(output: &Tensor, attention_mask: &Tensor) -> candle_core::Re
     let mask = input_mask_expanded.sum(1)?;
     let mask = mask.clamp(1e-9, f32::INFINITY)?;
     sum / mask
-}
-
-impl super::auto::AutoModel<BertConfig> for BertForMaskedLM {
-    type Model = Self;
-    fn auto_load(vb: VarBuilder, config: &BertConfig) -> Result<Self::Model> {
-        Self::new(vb, config)
-    }
 }

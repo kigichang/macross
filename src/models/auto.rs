@@ -49,8 +49,19 @@ impl AutoTokenizer {
     }
 }
 
+// pub trait PreloadModel<C: serde::de::DeserializeOwned> {
+//     fn new(vb: VarBuilder, config: &C) -> candle_core::Result<Self>
+//     where
+//         Self: Sized;
+// }
+
 pub trait AutoModel<C: serde::de::DeserializeOwned> {
     type Model;
+
+    fn new(vb: VarBuilder, config: &C) -> candle_core::Result<Self::Model>
+    where
+        Self::Model: Sized;
+
     fn from_local<P: AsRef<Path>>(
         config_file: P,
         model_file: P,
@@ -65,7 +76,7 @@ pub trait AutoModel<C: serde::de::DeserializeOwned> {
             unsafe { VarBuilder::from_mmaped_safetensors(&[model_file], dtype, device)? }
         };
 
-        Self::auto_load(vb, &config).map_err(anyhow::Error::msg)
+        Self::new(vb, &config).map_err(anyhow::Error::msg)
     }
 
     fn from_pretrained<M: Into<PretrainedModel>>(
@@ -78,6 +89,4 @@ pub trait AutoModel<C: serde::de::DeserializeOwned> {
         let model = pretrained_model.model()?;
         Self::from_local(config, model, dtype, device)
     }
-
-    fn auto_load(vb: VarBuilder, config: &C) -> candle_core::Result<Self::Model>;
 }

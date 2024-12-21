@@ -1,6 +1,6 @@
 use anyhow::Result;
 use candle_core::Tensor;
-use macross::models::bert_rs::BertForSequenceClassification;
+use macross::models::bert::BertForSequenceClassification;
 use macross::{AutoModel, AutoTokenizer};
 
 fn main() -> Result<()> {
@@ -56,7 +56,7 @@ fn main() -> Result<()> {
     // println!("ids: {:?}", ids);
     // println!("type_ids: {:?}", type_ids);
     // println!("attention_mask: {:?}", attention_mask);
-    let result = bert.forward(&ids, &type_ids, Some(&attention_mask))?;
+    let result = bert.forward(&ids, &type_ids, &attention_mask)?;
 
     // println!("{:?}", result);
     println!("{:?}", result.to_vec2::<f32>());
