@@ -1,24 +1,27 @@
 use anyhow::Result;
 use candle_core::{IndexOp, Tensor};
 use candle_nn::ops::softmax;
-use macross::models::bert::BertForMaskedLM;
-use macross::{AutoModel, AutoTokenizer, PretrainedModel};
+use macross::models::xlm_roberta::XLMRobertaForMaskedLM;
+use macross::{AutoModel, AutoTokenizer};
 
 fn main() -> Result<()> {
-    let test_strs = vec!["巴黎是[MASK]国的首都。", "生活的真谛是[MASK]。"];
+    let test_strs = vec!["Hello I'm a <mask> model."];
     let device = macross::device(false)?;
 
-    let pretrained_model = PretrainedModel::with_files(
-        "kigichang/fix-bert-base-chinese",
-        "config.json",
-        "fix-bert-base-chinese.safetensors",
-    );
+    // let pretrained_model = PretrainedModel::with_files(
+    //     "kigichang/fix-bert-base-chinese",
+    //     "config.json",
+    //     "fix-bert-base-chinese.safetensors",
+    // );
 
-    let tokenizer = AutoTokenizer::from_pretrained("kigichang/fix-bert-base-chinese")
-        .map_err(anyhow::Error::msg)?;
+    let tokenizer =
+        AutoTokenizer::from_pretrained("xlm-roberta-base").map_err(anyhow::Error::msg)?;
 
-    let bert =
-        BertForMaskedLM::from_pretrained(pretrained_model, candle_core::DType::F32, &device)?;
+    let bert = XLMRobertaForMaskedLM::from_pretrained(
+        "xlm-roberta-base",
+        candle_core::DType::F32,
+        &device,
+    )?;
 
     let mask_id: u32 = tokenizer
         .token_to_id("[MASK]")
@@ -34,11 +37,7 @@ fn main() -> Result<()> {
         let attention_mask = Tensor::stack(&[Tensor::new(ids.get_attention_mask(), &device)?], 0)?;
         let result = bert.forward(&input_ids, &token_type_ids, &attention_mask)?;
 
-        let mask_idx = ids
-            .get_ids()
-            .iter()
-            .position(|&x| x == mask_id)
-            .ok_or_else(|| anyhow::Error::msg("No [MASK] token"))?;
+        let mask_idx = ids.get_ids().iter().position(|&x| x == mask_id).unwrap();
         let mask_token_logits = result.i((0, mask_idx, ..))?;
         let mask_token_probs = softmax(&mask_token_logits, 0)?;
         let mut top5_tokens: Vec<(usize, f32)> = mask_token_probs
@@ -53,9 +52,7 @@ fn main() -> Result<()> {
         for (idx, prob) in top5_tokens {
             println!(
                 "{:?}: {:.3}",
-                tokenizer
-                    .id_to_token(idx as u32)
-                    .ok_or_else(|| anyhow::Error::msg("no token"))?,
+                tokenizer.id_to_token(idx as u32).unwrap(),
                 prob
             );
         }

@@ -3,12 +3,13 @@ use candle_core::Tensor;
 use macross::{AutoModel, AutoTokenizer};
 
 fn main() -> Result<()> {
+    const MODLE_NAME: &str = "BAAI/bge-m3";
+
     let device = macross::device(false)?;
-    let sentences = vec!["This is an example sentence", "Each sentence is converted"];
+    let sentences = vec!["這是一個文本", "這是另一個文本"];
     let tokenizer = {
         let mut tokenizer =
-            AutoTokenizer::from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
-                .map_err(anyhow::Error::msg)?;
+            AutoTokenizer::from_pretrained(MODLE_NAME).map_err(anyhow::Error::msg)?;
         let params = tokenizers::PaddingParams::default();
         let truncation = tokenizers::TruncationParams::default();
         let tokenizer = tokenizer.with_padding(Some(params));
@@ -18,8 +19,8 @@ fn main() -> Result<()> {
         tokenizer.clone()
     };
 
-    let bert = macross::models::bert::BertModel::from_pretrained(
-        ("sentence-transformers/all-MiniLM-L6-v2", true),
+    let bert = macross::models::xlm_roberta::XLMRobertaModel::from_pretrained(
+        (MODLE_NAME, true),
         candle_core::DType::F32,
         &device,
     )?;

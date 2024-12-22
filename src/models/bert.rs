@@ -116,12 +116,15 @@ impl BertEmbeddings {
         &self,
         input_ids: &Tensor,
         token_type_ids: &Tensor,
-        position_ids: Option<Tensor>,
+        position_ids: Option<&Tensor>,
     ) -> Result<Tensor> {
         let (_, seq_length) = input_ids.dims2()?;
 
-        let position_ids = position_ids
-            .unwrap_or_else(|| Tensor::arange(0, seq_length as u32, input_ids.device()).unwrap());
+        let position_ids = if let Some(position_ids) = position_ids {
+            position_ids.clone()
+        } else {
+            Tensor::arange(0, seq_length as u32, input_ids.device())?
+        };
 
         let inputs_embeds = self.word_embeddings.forward(&input_ids)?;
         let token_type_embeddings = self.token_type_embeddings.forward(&token_type_ids)?;
@@ -243,8 +246,7 @@ impl BertAttention {
 
     pub fn forward(&self, hidden_states: &Tensor, attention_mask: &Tensor) -> Result<Tensor> {
         let self_outputs = self.self_attention.forward(hidden_states, attention_mask)?;
-        let attention_output = self.output.forward(&self_outputs, hidden_states)?;
-        Ok(attention_output)
+        self.output.forward(&self_outputs, hidden_states)
     }
 }
 
@@ -307,7 +309,7 @@ pub struct BertLayer {
 }
 
 impl BertLayer {
-    pub fn new<'a>(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
+    pub fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
         let attention = BertAttention::new(vb.pp("attention"), config)?;
         let intermediate = BertIntermediate::new(vb.pp("intermediate"), config)?;
         let output = BertOutput::new(vb.pp("output"), config)?;
@@ -326,10 +328,7 @@ impl BertLayer {
 
     fn feed_forward_chunk(&self, attention_output: &Tensor) -> Result<Tensor> {
         let intermediate_output = self.intermediate.forward(attention_output)?;
-        let layer_output = self
-            .output
-            .forward(&intermediate_output, attention_output)?;
-        Ok(layer_output)
+        self.output.forward(&intermediate_output, attention_output)
     }
 }
 
@@ -501,7 +500,7 @@ impl BertModel {
     fn get_extended_attention_mask(&self, attention_mask: &Tensor, dtype: DType) -> Result<Tensor> {
         let extended_attention_mask = match attention_mask.rank() {
             3 => attention_mask.unsqueeze(1)?,
-            2 => attention_mask.unsqueeze(1)?.unsqueeze(1)?,
+            2 => attention_mask.unsqueeze(1)?.unsqueeze(2)?,
             _ => candle_core::bail!("wrong attention_mask (shape {:?})", attention_mask.dims()),
         };
 
