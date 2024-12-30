@@ -37,20 +37,24 @@ fn main() -> Result<()> {
         candle_core::DType::F32,
         &device,
     )?;
+
     let ids = encoded
         .iter()
-        .map(|e| Tensor::new(e.get_ids(), &device).unwrap())
-        .collect::<Vec<_>>();
+        .map(|e| Tensor::new(e.get_ids(), &device))
+        .collect::<candle_core::Result<Vec<_>>>()?;
     let ids = Tensor::stack(&ids, 0)?;
+
     let type_ids = encoded
         .iter()
-        .map(|e| Tensor::new(e.get_type_ids(), &device).unwrap())
-        .collect::<Vec<_>>();
+        .map(|e| Tensor::new(e.get_type_ids(), &device))
+        .collect::<candle_core::Result<Vec<_>>>()?;
     let type_ids = Tensor::stack(&type_ids, 0)?;
+
     let attention_mask = encoded
         .iter()
-        .map(|e| Tensor::new(e.get_attention_mask(), &device).unwrap())
-        .collect::<Vec<_>>();
+        .map(|e| Tensor::new(e.get_attention_mask(), &device))
+        .collect::<candle_core::Result<Vec<_>>>()?;
+
     let attention_mask = Tensor::stack(&attention_mask, 0)?;
 
     // println!("ids: {:?}", ids);
