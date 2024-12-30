@@ -42,8 +42,8 @@ pub struct BertConfig {
     pub label2id: Option<HashMap<String, usize>>,
 }
 
-impl BertConfig {
-    pub fn new() -> Self {
+impl Default for BertConfig {
+    fn default() -> Self {
         Self {
             vocab_size: 30522,
             hidden_size: 768,
@@ -79,7 +79,7 @@ pub struct BertEmbeddings {
 }
 
 impl BertEmbeddings {
-    pub fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
+    pub fn load(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
         let word_embeddings = crate::embedding(
             config.vocab_size,
             config.hidden_size,
@@ -150,7 +150,7 @@ pub struct BertSelfAttention {
 }
 
 impl BertSelfAttention {
-    pub fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
+    pub fn load(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
         let num_attention_heads = config.num_attention_heads;
         let attention_head_size = config.hidden_size / config.num_attention_heads;
         let all_head_size = num_attention_heads * attention_head_size;
@@ -206,7 +206,7 @@ pub struct BertSelfOutput {
 }
 
 impl BertSelfOutput {
-    pub fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
+    pub fn load(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
         let dense = crate::linear(config.hidden_size, config.hidden_size, vb.pp("dense"))?;
         let layer_norm = crate::layer_norm(
             config.hidden_size,
@@ -234,9 +234,9 @@ pub struct BertAttention {
 }
 
 impl BertAttention {
-    pub fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
-        let self_attention = BertSelfAttention::new(vb.pp("self"), config)?;
-        let output = BertSelfOutput::new(vb.pp("output"), config)?;
+    pub fn load(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
+        let self_attention = BertSelfAttention::load(vb.pp("self"), config)?;
+        let output = BertSelfOutput::load(vb.pp("output"), config)?;
 
         Ok(Self {
             self_attention,
@@ -256,7 +256,7 @@ pub struct BertIntermediate {
 }
 
 impl BertIntermediate {
-    pub fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
+    pub fn load(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
         let dense = crate::linear(config.hidden_size, config.intermediate_size, vb.pp("dense"))?;
         let intermediate_act_fn = super::activations::HiddenActLayer::new(config.hidden_act);
 
@@ -279,7 +279,7 @@ pub struct BertOutput {
 }
 
 impl BertOutput {
-    pub fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
+    pub fn load(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
         let dense = crate::linear(config.intermediate_size, config.hidden_size, vb.pp("dense"))?;
         let layer_norm = crate::layer_norm(
             config.hidden_size,
@@ -309,10 +309,10 @@ pub struct BertLayer {
 }
 
 impl BertLayer {
-    pub fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
-        let attention = BertAttention::new(vb.pp("attention"), config)?;
-        let intermediate = BertIntermediate::new(vb.pp("intermediate"), config)?;
-        let output = BertOutput::new(vb.pp("output"), config)?;
+    pub fn load(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
+        let attention = BertAttention::load(vb.pp("attention"), config)?;
+        let intermediate = BertIntermediate::load(vb.pp("intermediate"), config)?;
+        let output = BertOutput::load(vb.pp("output"), config)?;
 
         Ok(Self {
             attention,
@@ -337,9 +337,9 @@ pub struct BertEncoder {
 }
 
 impl BertEncoder {
-    pub fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
+    pub fn load(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
         let layer: Vec<BertLayer> = (0..config.num_hidden_layers)
-            .map(|idx| BertLayer::new(vb.pp(format!("layer.{idx}")), config))
+            .map(|idx| BertLayer::load(vb.pp(format!("layer.{idx}")), config))
             .collect::<Result<Vec<_>>>()?;
 
         Ok(Self { layer })
@@ -360,7 +360,7 @@ pub struct BertPooler {
 }
 
 impl BertPooler {
-    pub fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
+    pub fn load(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
         let dense = crate::linear(config.hidden_size, config.hidden_size, vb.pp("dense"))?;
 
         Ok(Self { dense })
@@ -382,7 +382,7 @@ pub struct BertPredictionHeadTransform {
 }
 
 impl BertPredictionHeadTransform {
-    pub fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
+    pub fn load(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
         let dense = crate::linear(config.hidden_size, config.hidden_size, vb.pp("dense"))?;
         let transform_act_fn = super::activations::HiddenActLayer::new(config.hidden_act);
         let layer_norm = crate::layer_norm(
@@ -411,8 +411,8 @@ pub struct BertLMPredictionHead {
 }
 
 impl BertLMPredictionHead {
-    pub fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
-        let transform = BertPredictionHeadTransform::new(vb.pp("transform"), config)?;
+    pub fn load(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
+        let transform = BertPredictionHeadTransform::load(vb.pp("transform"), config)?;
         let decoder = crate::linear(config.hidden_size, config.vocab_size, vb.pp("decoder"))?;
 
         Ok(BertLMPredictionHead { transform, decoder })
@@ -429,8 +429,8 @@ pub struct BertOnlyMLMHead {
 }
 
 impl BertOnlyMLMHead {
-    pub fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
-        let predictions = BertLMPredictionHead::new(vb.pp("predictions"), config)?;
+    pub fn load(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
+        let predictions = BertLMPredictionHead::load(vb.pp("predictions"), config)?;
 
         Ok(Self { predictions })
     }
@@ -445,7 +445,7 @@ pub struct BertOnlyNSPHead {
 }
 
 impl BertOnlyNSPHead {
-    pub fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
+    pub fn load(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
         let seq_relationship = crate::linear(config.hidden_size, 2, vb.pp("seq_relationship"))?;
 
         Ok(Self { seq_relationship })
@@ -461,11 +461,12 @@ pub struct BertModel {
     encoder: BertEncoder,
 }
 
-impl AutoModel<BertConfig> for BertModel {
+impl AutoModel for BertModel {
+    type Config = BertConfig;
     type Model = Self;
-    fn new(vb: VarBuilder, config: &BertConfig) -> Result<BertModel> {
-        let embeddings = BertEmbeddings::new(vb.pp("embeddings"), config)?;
-        let encoder = BertEncoder::new(vb.pp("encoder"), config)?;
+    fn load(vb: VarBuilder, config: &BertConfig) -> Result<BertModel> {
+        let embeddings = BertEmbeddings::load(vb.pp("embeddings"), config)?;
+        let encoder = BertEncoder::load(vb.pp("encoder"), config)?;
 
         Ok(BertModel {
             embeddings,
@@ -520,11 +521,12 @@ pub struct BertModelWithPooler {
     pooler: BertPooler,
 }
 
-impl AutoModel<BertConfig> for BertModelWithPooler {
+impl AutoModel for BertModelWithPooler {
+    type Config = BertConfig;
     type Model = Self;
-    fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
-        let bert = BertModel::new(vb.clone(), config)?;
-        let pooler = BertPooler::new(vb.pp("pooler"), config)?;
+    fn load(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
+        let bert = BertModel::load(vb.clone(), config)?;
+        let pooler = BertPooler::load(vb.pp("pooler"), config)?;
 
         Ok(Self { bert, pooler })
     }
@@ -550,9 +552,9 @@ pub struct BertLMHeadModel {
 }
 
 impl BertLMHeadModel {
-    pub fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
-        let bert = BertModel::new(vb.pp("bert"), config)?;
-        let cls = BertOnlyMLMHead::new(vb.pp("cls"), config)?;
+    pub fn load(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
+        let bert = BertModel::load(vb.pp("bert"), config)?;
+        let cls = BertOnlyMLMHead::load(vb.pp("cls"), config)?;
 
         Ok(BertLMHeadModel { bert, cls })
     }
@@ -584,11 +586,12 @@ pub struct BertForMaskedLM {
     cls: BertOnlyMLMHead,
 }
 
-impl AutoModel<BertConfig> for BertForMaskedLM {
+impl AutoModel for BertForMaskedLM {
+    type Config = BertConfig;
     type Model = Self;
-    fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
-        let bert = BertModel::new(vb.pp("bert"), config)?;
-        let cls = BertOnlyMLMHead::new(vb.pp("cls"), config)?;
+    fn load(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
+        let bert = BertModel::load(vb.pp("bert"), config)?;
+        let cls = BertOnlyMLMHead::load(vb.pp("cls"), config)?;
 
         Ok(BertForMaskedLM { bert, cls })
     }
@@ -623,9 +626,9 @@ pub struct BertForNextSentencePrediction {
 }
 
 impl BertForNextSentencePrediction {
-    pub fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
-        let bert = BertModelWithPooler::new(vb.pp("bert"), config)?;
-        let cls = BertOnlyNSPHead::new(vb.pp("cls"), config)?;
+    pub fn load(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
+        let bert = BertModelWithPooler::load(vb.pp("bert"), config)?;
+        let cls = BertOnlyNSPHead::load(vb.pp("cls"), config)?;
 
         Ok(BertForNextSentencePrediction { bert, cls })
     }
@@ -650,10 +653,11 @@ pub struct BertForSequenceClassification {
     classifier: crate::Linear,
 }
 
-impl AutoModel<BertConfig> for BertForSequenceClassification {
+impl AutoModel for BertForSequenceClassification {
+    type Config = BertConfig;
     type Model = Self;
-    fn new(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
-        let bert = BertModelWithPooler::new(vb.pp("bert"), config)?;
+    fn load(vb: VarBuilder, config: &BertConfig) -> Result<Self> {
+        let bert = BertModelWithPooler::load(vb.pp("bert"), config)?;
         let classifier_dropout = config
             .classifier_dropout
             .unwrap_or(config.hidden_dropout_prob);

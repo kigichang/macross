@@ -55,10 +55,11 @@ impl AutoTokenizer {
 //         Self: Sized;
 // }
 
-pub trait AutoModel<C: serde::de::DeserializeOwned> {
+pub trait AutoModel {
+    type Config: serde::de::DeserializeOwned;
     type Model;
 
-    fn new(vb: VarBuilder, config: &C) -> candle_core::Result<Self::Model>
+    fn load(vb: VarBuilder, config: &Self::Config) -> candle_core::Result<Self::Model>
     where
         Self::Model: Sized;
 
@@ -69,14 +70,14 @@ pub trait AutoModel<C: serde::de::DeserializeOwned> {
         device: &Device,
     ) -> anyhow::Result<Self::Model> {
         let reader = std::fs::File::open(config_file)?;
-        let config: C = serde_json::from_reader(reader)?;
+        let config: Self::Config = serde_json::from_reader(reader)?;
         let vb = if is_pth(&model_file) {
             VarBuilder::from_pth(model_file, dtype, device)?
         } else {
             unsafe { VarBuilder::from_mmaped_safetensors(&[model_file], dtype, device)? }
         };
 
-        Self::new(vb, &config).map_err(anyhow::Error::msg)
+        Self::load(vb, &config).map_err(anyhow::Error::msg)
     }
 
     fn from_pretrained<M: Into<PretrainedModel>>(

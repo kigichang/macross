@@ -76,7 +76,7 @@ pub struct XLMRobertaEmbeddings {
 }
 
 impl XLMRobertaEmbeddings {
-    pub fn new(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
+    pub fn load(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
         let word_embeddings = crate::embedding(
             config.vocab_size,
             config.hidden_size,
@@ -120,16 +120,32 @@ impl XLMRobertaEmbeddings {
         let position_ids = if let Some(position_ids) = position_ids {
             position_ids.clone()
         } else {
-            Tensor::arange(0, seq_length as u32, input_ids.device())?
+            create_position_ids_from_input_ids(input_ids, self.padding_idx as u32, 1)?
+            //Tensor::arange(0, seq_length as u32, input_ids.device())?
         };
 
         let inputs_embeds = self.word_embeddings.forward(&input_ids)?;
+        println!("inputs_embeds: {:?}", inputs_embeds.shape());
+        crate::print_tensor::<f32>(&inputs_embeds)?;
+
         let token_type_embeddings = self.token_type_embeddings.forward(&token_type_ids)?;
+        println!("token_type_embeddings: {:?}", token_type_embeddings.shape());
+        crate::print_tensor::<f32>(&token_type_embeddings)?;
+
         let mut embeddings = (inputs_embeds + token_type_embeddings)?;
+        println!("embeddings: {:?}", embeddings.shape());
+        crate::print_tensor::<f32>(&embeddings)?;
 
         if let PositionEmbeddingType::Absolute = self.position_embedding_type {
+            println!("position_ids: {:?}", position_ids.shape());
+            crate::print_tensor::<u8>(&position_ids)?;
             let position_embeddings = self.position_embeddings.forward(&position_ids)?;
+            println!("position_embeddings: {:?}", position_embeddings.shape());
+            crate::print_tensor::<f32>(&position_embeddings)?;
+
             embeddings = embeddings.broadcast_add(&position_embeddings)?;
+            println!("embeddings: {:?}", embeddings.shape());
+            crate::print_tensor::<f32>(&embeddings)?;
         }
 
         let embeddings = self.layer_norm.forward(&embeddings)?;
@@ -152,7 +168,7 @@ pub struct XLMRobertaSelfAttention {
 }
 
 impl XLMRobertaSelfAttention {
-    pub fn new(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
+    pub fn load(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
         if config.hidden_size % config.num_attention_heads != 0 {
             candle_core::bail!(
                 "The hidden size ({}) is not a multiple of the number of attention heads ({})",
@@ -234,7 +250,7 @@ pub struct XLMRobertaSelfOutput {
 }
 
 impl XLMRobertaSelfOutput {
-    pub fn new(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
+    pub fn load(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
         let dense = crate::linear(config.hidden_size, config.hidden_size, vb.pp("dense"))?;
         let layer_norm = crate::layer_norm(
             config.hidden_size,
@@ -263,9 +279,9 @@ pub struct XLMRobertaAttention {
 }
 
 impl XLMRobertaAttention {
-    pub fn new(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
-        let self_attention = XLMRobertaSelfAttention::new(vb.pp("self"), config)?;
-        let output = XLMRobertaSelfOutput::new(vb.pp("output"), config)?;
+    pub fn load(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
+        let self_attention = XLMRobertaSelfAttention::load(vb.pp("self"), config)?;
+        let output = XLMRobertaSelfOutput::load(vb.pp("output"), config)?;
 
         Ok(Self {
             self_attention,
@@ -285,7 +301,7 @@ pub struct XLMRobertaIntermediate {
 }
 
 impl XLMRobertaIntermediate {
-    pub fn new(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
+    pub fn load(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
         let dense = crate::linear(config.hidden_size, config.intermediate_size, vb.pp("dense"))?;
         let intermediate_act_fn = HiddenActLayer::new(config.hidden_act);
 
@@ -308,7 +324,7 @@ pub struct XLMRobertaOutput {
 }
 
 impl XLMRobertaOutput {
-    pub fn new(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
+    pub fn load(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
         let dense = crate::linear(config.intermediate_size, config.hidden_size, vb.pp("dense"))?;
         let layer_norm = crate::layer_norm(
             config.hidden_size,
@@ -343,10 +359,10 @@ pub struct XLMRobertaLayer {
 }
 
 impl XLMRobertaLayer {
-    pub fn new(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
-        let attention = XLMRobertaAttention::new(vb.pp("attention"), config)?;
-        let intermediate = XLMRobertaIntermediate::new(vb.pp("intermediate"), config)?;
-        let output = XLMRobertaOutput::new(vb.pp("output"), config)?;
+    pub fn load(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
+        let attention = XLMRobertaAttention::load(vb.pp("attention"), config)?;
+        let intermediate = XLMRobertaIntermediate::load(vb.pp("intermediate"), config)?;
+        let output = XLMRobertaOutput::load(vb.pp("output"), config)?;
 
         Ok(Self {
             // seq_len_dim: 1,
@@ -374,9 +390,9 @@ pub struct XLMRobertaEncoder {
 }
 
 impl XLMRobertaEncoder {
-    pub fn new(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
+    pub fn load(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
         let layer: Vec<XLMRobertaLayer> = (0..config.num_hidden_layers)
-            .map(|idx| XLMRobertaLayer::new(vb.pp(format!("layer.{idx}")), config))
+            .map(|idx| XLMRobertaLayer::load(vb.pp(format!("layer.{idx}")), config))
             .collect::<Result<Vec<_>>>()?;
 
         Ok(Self {
@@ -401,7 +417,7 @@ pub struct XLMRobertaPooler {
 }
 
 impl XLMRobertaPooler {
-    pub fn new(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
+    pub fn load(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
         let dense = crate::linear(config.hidden_size, config.hidden_size, vb.pp("dense"))?;
         // let activation = tanh;
 
@@ -422,11 +438,12 @@ pub struct XLMRobertaModel {
     encoder: XLMRobertaEncoder,
 }
 
-impl AutoModel<XLMRobertaConfig> for XLMRobertaModel {
+impl AutoModel for XLMRobertaModel {
+    type Config = XLMRobertaConfig;
     type Model = Self;
-    fn new(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
-        let embeddings = XLMRobertaEmbeddings::new(vb.pp("embeddings"), config)?;
-        let encoder = XLMRobertaEncoder::new(vb.pp("encoder"), config)?;
+    fn load(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
+        let embeddings = XLMRobertaEmbeddings::load(vb.pp("embeddings"), config)?;
+        let encoder = XLMRobertaEncoder::load(vb.pp("encoder"), config)?;
 
         Ok(Self {
             embeddings,
@@ -443,6 +460,9 @@ impl XLMRobertaModel {
         attention_mask: &Tensor,
     ) -> Result<Tensor> {
         let embedding_output = self.embeddings.forward(input_ids, token_type_ids, None)?;
+        //println!("embedding_output: {:?}", embedding_output.to_vec3::<f32>()?);
+        println!("embedding_output");
+        crate::print_tensor::<f32>(&embedding_output)?;
 
         let extended_attention_mask =
             self.get_extended_attention_mask(&attention_mask, DType::F32)?;
@@ -475,11 +495,12 @@ pub struct XLMRobertaModelWithPooler {
     pooler: XLMRobertaPooler,
 }
 
-impl AutoModel<XLMRobertaConfig> for XLMRobertaModelWithPooler {
+impl AutoModel for XLMRobertaModelWithPooler {
+    type Config = XLMRobertaConfig;
     type Model = Self;
-    fn new(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
-        let bert = XLMRobertaModel::new(vb.clone(), config)?;
-        let pooler = XLMRobertaPooler::new(vb.pp("pooler"), config)?;
+    fn load(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
+        let bert = XLMRobertaModel::load(vb.clone(), config)?;
+        let pooler = XLMRobertaPooler::load(vb.pp("pooler"), config)?;
 
         Ok(Self { bert, pooler })
     }
@@ -507,17 +528,16 @@ pub struct XLMRobertaLMHead {
 }
 
 impl XLMRobertaLMHead {
-    pub fn new(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
+    pub fn load(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
         let dense = crate::linear(config.hidden_size, config.hidden_size, vb.pp("dense"))?;
         let layer_norm = crate::layer_norm(
             config.hidden_size,
             config.layer_norm_eps,
             vb.pp("layer_norm"),
         )?;
-        let decoder =
-            crate::linear_no_bias(config.hidden_size, config.vocab_size, vb.pp("decoder"))?;
-        // let bias = Tensor::zeros(&[config.vocab_size], (DType::Float, vb.device()))?;
-        // decoder.set_bias(Some(bias.clone()))?;
+        let mut decoder = crate::linear(config.hidden_size, config.vocab_size, vb.pp("decoder"))?;
+        let bias = Tensor::zeros(config.vocab_size, DType::F32, vb.device())?;
+        decoder.set_bias(Some(bias));
 
         Ok(Self {
             dense,
@@ -550,11 +570,12 @@ pub struct XLMRobertaForMaskedLM {
     lm_head: XLMRobertaLMHead,
 }
 
-impl AutoModel<XLMRobertaConfig> for XLMRobertaForMaskedLM {
+impl AutoModel for XLMRobertaForMaskedLM {
+    type Config = XLMRobertaConfig;
     type Model = Self;
-    fn new(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
-        let roberta = XLMRobertaModel::new(vb.pp("roberta"), config)?;
-        let lm_head = XLMRobertaLMHead::new(vb.pp("lm_head"), config)?;
+    fn load(vb: VarBuilder, config: &XLMRobertaConfig) -> Result<Self> {
+        let roberta = XLMRobertaModel::load(vb.pp("roberta"), config)?;
+        let lm_head = XLMRobertaLMHead::load(vb.pp("lm_head"), config)?;
 
         Ok(Self { roberta, lm_head })
     }
@@ -581,4 +602,51 @@ impl XLMRobertaForMaskedLM {
     pub fn set_output_embeddings(&mut self, new_embeddings: Linear) {
         self.lm_head.decoder = new_embeddings;
     }
+}
+
+pub fn create_position_ids_from_input_ids(
+    input_ids: &Tensor,
+    padding_idx: u32,
+    past_key_values_length: u8,
+) -> Result<Tensor> {
+    let mask = input_ids.ne(padding_idx)?;
+    let incremental_indices = cumsum_2d(&mask, 0, input_ids.device())?;
+
+    let incremental_indices = incremental_indices
+        .broadcast_add(&Tensor::new(&[past_key_values_length], input_ids.device())?)?;
+
+    Ok(incremental_indices)
+}
+
+fn cumsum_2d(mask: &Tensor, dim: u8, device: &candle_core::Device) -> Result<Tensor> {
+    let mask = mask.to_vec2::<u8>()?;
+
+    let rows = mask.len();
+    let cols = mask[0].len();
+
+    let mut result = mask.clone();
+
+    match dim {
+        0 => {
+            // Cumulative sum along rows
+            for i in 0..rows {
+                for j in 1..cols {
+                    result[i][j] += result[i][j - 1];
+                }
+            }
+        }
+        1 => {
+            // Cumulative sum along columns
+            for j in 0..cols {
+                for i in 1..rows {
+                    result[i][j] += result[i - 1][j];
+                }
+            }
+        }
+        _ => panic!("Dimension not supported"),
+    }
+
+    let result = Tensor::new(result, &device)?;
+
+    Ok(result)
 }
