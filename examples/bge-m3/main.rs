@@ -6,7 +6,7 @@ fn main() -> Result<()> {
     const MODLE_NAME: &str = "BAAI/bge-m3";
 
     let device = macross::device(false)?;
-    let sentences = vec!["這是一個文本", "這是另一個文本"];
+    let sentences = vec!["What is BGE M3?", "Defination of BM25"];
     let tokenizer = {
         let mut tokenizer =
             AutoTokenizer::from_pretrained(MODLE_NAME).map_err(anyhow::Error::msg)?;
@@ -22,7 +22,7 @@ fn main() -> Result<()> {
     };
     // println!("tokenizer: {:?}", tokenizer);
 
-    let bert = macross::models::bert::BertModel::from_pretrained(
+    let bert = macross::models::xlm_roberta::XLMRobertaModel::from_pretrained(
         (MODLE_NAME, true),
         candle_core::DType::F32,
         &device,
@@ -54,9 +54,12 @@ fn main() -> Result<()> {
     println!("attention_mask: {:?}", attention_mask.to_vec2::<u32>()?);
 
     let result = bert.forward(&ids, &type_ids, &attention_mask)?;
+    // let result = bert.forward(&ids, &attention_mask, &type_ids, None, None, None)?;
     let result = result.i((.., 0))?.contiguous()?;
+    let result = macross::normalize(&result)?;
+    macross::print_tensor::<f32>(&result)?;
     //println!("result: {:?}", result.i(1)?.to_vec1::<f32>()?);
-    println!("result: {:?}", result.to_vec2::<f32>()?);
+    //println!("result: {:?}", result.to_vec2::<f32>()?);
     //let result = result.mean(1)?;
     // let mean = result.mean(1)?;
     // let result = macross::normalize(&mean)?;
