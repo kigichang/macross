@@ -30,7 +30,15 @@ fn main() -> Result<()> {
         println!("token_type_ids: {:?}", token_type_ids.to_vec2::<u32>()?);
         let attention_mask = Tensor::stack(&[Tensor::new(ids.get_attention_mask(), &device)?], 0)?;
         println!("attention_mask: {:?}", attention_mask.to_vec2::<u32>()?);
-        let result = bert.forward(&input_ids, &token_type_ids, &attention_mask)?;
+        //let result = bert.forward(&input_ids, &token_type_ids, &attention_mask)?;
+        let result = bert.forward(
+            &input_ids,
+            &attention_mask,
+            &token_type_ids,
+            None,
+            None,
+            None,
+        )?;
 
         let mask_idx = ids.get_ids().iter().position(|&x| x == mask_id).unwrap();
         let mask_token_logits = result.i((0, mask_idx, ..))?;
