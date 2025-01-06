@@ -6,14 +6,14 @@ fn main() -> Result<()> {
     const MODLE_NAME: &str = "BAAI/bge-m3";
 
     let device = macross::device(false)?;
-    let sentences = vec!["What is BGE M3?", "Defination of BM25"];
+
     let tokenizer = {
         let mut tokenizer =
             AutoTokenizer::from_pretrained(MODLE_NAME).map_err(anyhow::Error::msg)?;
         let params = tokenizers::PaddingParams::default();
-        println!("padding: {:?}", params);
+        //println!("padding: {:?}", params);
         let truncation = tokenizers::TruncationParams::default();
-        println!("truncate: {:?}", truncation);
+        //println!("truncate: {:?}", truncation);
         let tokenizer = tokenizer.with_padding(Some(params));
         let tokenizer = tokenizer
             .with_truncation(Some(truncation))
@@ -28,35 +28,78 @@ fn main() -> Result<()> {
         &device,
     )?;
 
-    let encoded_input = tokenizer
-        .encode_batch(sentences, true)
-        .map_err(anyhow::Error::msg)?;
+    let s1 = {
+        let sentences = vec!["What is BGE M3?", "Defination of BM25"];
+        let encoded_input = tokenizer
+            .encode_batch(sentences, true)
+            .map_err(anyhow::Error::msg)?;
 
-    let ids = encoded_input
-        .iter()
-        .map(|e| Tensor::new(e.get_ids(), &device))
-        .collect::<candle_core::Result<Vec<_>>>()?;
-    let ids = Tensor::stack(&ids, 0)?;
-    // println!("ids: {:?}", ids.to_vec2::<u32>()?);
+        let ids = encoded_input
+            .iter()
+            .map(|e| Tensor::new(e.get_ids(), &device))
+            .collect::<candle_core::Result<Vec<_>>>()?;
+        let ids = Tensor::stack(&ids, 0)?;
+        // println!("ids: {:?}", ids.to_vec2::<u32>()?);
 
-    let type_ids = encoded_input
-        .iter()
-        .map(|e| Tensor::new(e.get_type_ids(), &device))
-        .collect::<candle_core::Result<Vec<_>>>()?;
-    let type_ids = Tensor::stack(&type_ids, 0)?;
-    // println!("type_ids: {:?}", type_ids.to_vec2::<u32>()?);
+        let type_ids = encoded_input
+            .iter()
+            .map(|e| Tensor::new(e.get_type_ids(), &device))
+            .collect::<candle_core::Result<Vec<_>>>()?;
+        let type_ids = Tensor::stack(&type_ids, 0)?;
+        // println!("type_ids: {:?}", type_ids.to_vec2::<u32>()?);
 
-    let attention_mask = encoded_input
-        .iter()
-        .map(|e| Tensor::new(e.get_attention_mask(), &device))
-        .collect::<candle_core::Result<Vec<_>>>()?;
-    let attention_mask = Tensor::stack(&attention_mask, 0)?;
-    println!("attention_mask: {:?}", attention_mask.to_vec2::<u32>()?);
+        let attention_mask = encoded_input
+            .iter()
+            .map(|e| Tensor::new(e.get_attention_mask(), &device))
+            .collect::<candle_core::Result<Vec<_>>>()?;
+        let attention_mask = Tensor::stack(&attention_mask, 0)?;
+        //println!("attention_mask: {:?}", attention_mask.to_vec2::<u32>()?);
 
-    let result = bert.forward(&ids, &type_ids, &attention_mask)?;
-    // let result = bert.forward(&ids, &attention_mask, &type_ids, None, None, None)?;
-    let result = result.i((.., 0))?.contiguous()?;
-    let result = macross::normalize(&result)?;
+        let result = bert.forward(&ids, &type_ids, &attention_mask)?;
+        // let result = bert.forward(&ids, &attention_mask, &type_ids, None, None, None)?;
+        let result = result.i((.., 0))?.contiguous()?;
+        let result = macross::normalize(&result)?;
+        macross::print_tensor::<f32>(&result)?;
+        result
+    };
+
+    let s2 = {
+        let sentences = vec!["BGE M3 is an embedding model supporting dense retrieval, lexical matching and multi-vector interaction.", 
+               "BM25 is a bag-of-words retrieval function that ranks a set of documents based on the query terms appearing in each document"];
+        let encoded_input = tokenizer
+            .encode_batch(sentences, true)
+            .map_err(anyhow::Error::msg)?;
+
+        let ids = encoded_input
+            .iter()
+            .map(|e| Tensor::new(e.get_ids(), &device))
+            .collect::<candle_core::Result<Vec<_>>>()?;
+        let ids = Tensor::stack(&ids, 0)?;
+        // println!("ids: {:?}", ids.to_vec2::<u32>()?);
+
+        let type_ids = encoded_input
+            .iter()
+            .map(|e| Tensor::new(e.get_type_ids(), &device))
+            .collect::<candle_core::Result<Vec<_>>>()?;
+        let type_ids = Tensor::stack(&type_ids, 0)?;
+        // println!("type_ids: {:?}", type_ids.to_vec2::<u32>()?);
+
+        let attention_mask = encoded_input
+            .iter()
+            .map(|e| Tensor::new(e.get_attention_mask(), &device))
+            .collect::<candle_core::Result<Vec<_>>>()?;
+        let attention_mask = Tensor::stack(&attention_mask, 0)?;
+        //println!("attention_mask: {:?}", attention_mask.to_vec2::<u32>()?);
+
+        let result = bert.forward(&ids, &type_ids, &attention_mask)?;
+        // let result = bert.forward(&ids, &attention_mask, &type_ids, None, None, None)?;
+        let result = result.i((.., 0))?.contiguous()?;
+        let result = macross::normalize(&result)?;
+        macross::print_tensor::<f32>(&result)?;
+        result
+    };
+
+    let result = s1.matmul(&s2.t()?)?;
     macross::print_tensor::<f32>(&result)?;
     //println!("result: {:?}", result.i(1)?.to_vec1::<f32>()?);
     //println!("result: {:?}", result.to_vec2::<f32>()?);

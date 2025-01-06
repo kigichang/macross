@@ -125,27 +125,27 @@ impl XLMRobertaEmbeddings {
         };
 
         let inputs_embeds = self.word_embeddings.forward(&input_ids)?;
-        println!("inputs_embeds: {:?}", inputs_embeds.shape());
-        crate::print_tensor::<f32>(&inputs_embeds)?;
+        // println!("inputs_embeds: {:?}", inputs_embeds.shape());
+        // crate::print_tensor::<f32>(&inputs_embeds)?;
 
         let token_type_embeddings = self.token_type_embeddings.forward(&token_type_ids)?;
-        println!("token_type_embeddings: {:?}", token_type_embeddings.shape());
-        crate::print_tensor::<f32>(&token_type_embeddings)?;
+        // println!("token_type_embeddings: {:?}", token_type_embeddings.shape());
+        // crate::print_tensor::<f32>(&token_type_embeddings)?;
 
         let mut embeddings = (inputs_embeds + token_type_embeddings)?;
-        println!("embeddings: {:?}", embeddings.shape());
-        crate::print_tensor::<f32>(&embeddings)?;
+        // println!("embeddings: {:?}", embeddings.shape());
+        // crate::print_tensor::<f32>(&embeddings)?;
 
         if let PositionEmbeddingType::Absolute = self.position_embedding_type {
-            println!("position_ids: {:?}", position_ids.shape());
-            crate::print_tensor::<u8>(&position_ids)?;
+            // println!("position_ids: {:?}", position_ids.shape());
+            // crate::print_tensor::<u8>(&position_ids)?;
             let position_embeddings = self.position_embeddings.forward(&position_ids)?;
-            println!("position_embeddings: {:?}", position_embeddings.shape());
-            crate::print_tensor::<f32>(&position_embeddings)?;
+            // println!("position_embeddings: {:?}", position_embeddings.shape());
+            // crate::print_tensor::<f32>(&position_embeddings)?;
 
             embeddings = embeddings.broadcast_add(&position_embeddings)?;
-            println!("embeddings: {:?}", embeddings.shape());
-            crate::print_tensor::<f32>(&embeddings)?;
+            // println!("embeddings: {:?}", embeddings.shape());
+            // crate::print_tensor::<f32>(&embeddings)?;
         }
 
         let embeddings = self.layer_norm.forward(&embeddings)?;
@@ -461,8 +461,8 @@ impl XLMRobertaModel {
     ) -> Result<Tensor> {
         let embedding_output = self.embeddings.forward(input_ids, token_type_ids, None)?;
         //println!("embedding_output: {:?}", embedding_output.to_vec3::<f32>()?);
-        println!("embedding_output");
-        crate::print_tensor::<f32>(&embedding_output)?;
+        // println!("embedding_output");
+        // crate::print_tensor::<f32>(&embedding_output)?;
 
         let extended_attention_mask =
             self.get_extended_attention_mask(&attention_mask, DType::F32)?;

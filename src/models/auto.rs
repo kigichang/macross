@@ -47,6 +47,10 @@ impl AutoTokenizer {
     ) -> tokenizers::Result<Self> {
         Self::from_pretrained((repo_id, revision))
     }
+
+    pub fn into_inner(self) -> Tokenizer {
+        self.0
+    }
 }
 
 // pub trait PreloadModel<C: serde::de::DeserializeOwned> {
