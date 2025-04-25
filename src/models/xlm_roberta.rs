@@ -116,7 +116,7 @@ impl XLMRobertaEmbeddings {
         token_type_ids: &Tensor,
         position_ids: Option<&Tensor>,
     ) -> Result<Tensor> {
-        let (_, seq_length) = input_ids.dims2()?;
+        let (_, _seq_length) = input_ids.dims2()?;
         let position_ids = if let Some(position_ids) = position_ids {
             position_ids.clone()
         } else {
@@ -161,8 +161,11 @@ pub struct XLMRobertaSelfAttention {
     key: Linear,
     value: Linear,
     dropout: Dropout,
+    #[allow(dead_code)]
     position_embedding_type: PositionEmbeddingType,
+    #[allow(dead_code)]
     max_position_embeddings: Option<usize>,
+    #[allow(dead_code)]
     distance_embedding: Option<Embedding>,
     // is_decoder: bool,
 }
