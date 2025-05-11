@@ -15,6 +15,7 @@ fn is_pth<P: AsRef<Path>>(model_file: P) -> bool {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct AutoTokenizer(Tokenizer);
 
 impl Deref for AutoTokenizer {
